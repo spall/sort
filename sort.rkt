@@ -15,6 +15,46 @@
 (define-syntax-rule (<? x y)
   (< x y))
 
+(define (custom-parallel-sort lst)
+  (define n (length lst))
+  (define half1 (i>> n 1))
+  (define half2 (i- n half1))
+  (displayln half1)
+  (displayln half2)
+  (let ([vec1 (make-vector (+ half1 (ceiling (/ half1 2))))]
+        [vec2 (make-vector (+ half2 (ceiling (/ half2 2))))])
+    ;; list -> vector
+    ;; half1
+    (let loop ([i 0] [lst lst])
+      (cond
+        [(empty? lst)
+         void]
+        [(i< i half1)
+         (begin (vector-set! vec1 i (car lst))
+                (loop (add1 i) (cdr lst)))]
+        [else
+         (begin (vector-set! vec2 (- i half1) (car lst))
+                (loop (add1 i) (cdr lst)))]))
+    
+    (define f1 (future (lambda () (sort vec1 half1)))) ;;
+    (sort vec2 half2)
+    (touch f1)
+    ;; merge the two vectors
+    ;; vector -> list
+    (let loop ([i n] [pos1 (- half1 1)] [pos2 (- half2 1)] [r '()])
+      (let ([i (sub1 i)])
+        (if (< i 0)
+            r
+            (cond
+              [(< pos1 0)
+               (loop i pos1 (- pos2 1) (cons (vector-ref vec2 pos2) r))]
+              [(< pos2 0)
+               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))]
+              [(<? (vector-ref vec1 pos1) (vector-ref vec2 pos2))
+               (loop i pos1 (- pos2 1) (cons (vector-ref vec2 pos2) r))]
+              [else
+               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))]))))))
+
 (define (custom-sort lst)
   (define n (length lst))
   (let ([vec (make-vector (+ n (ceiling (/ n 2))))])
@@ -87,3 +127,7 @@
       (unless (zero? n/2-)
         (copying-mergesort Alo Amid2 n/2-))
       (merge #f B1lo (i+ B1lo n/2+) Amid2 Ahi Alo))))
+
+(custom-sort (shuffle (range 12)))
+(custom-parallel-sort (shuffle (range 13)))
+;; add more tests
