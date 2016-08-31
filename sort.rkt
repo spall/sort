@@ -19,8 +19,6 @@
   (define n (length lst))
   (define half1 (i>> n 1))
   (define half2 (i- n half1))
-  (displayln half1)
-  (displayln half2)
   (let ([vec1 (make-vector (+ half1 (ceiling (/ half1 2))))]
         [vec2 (make-vector (+ half2 (ceiling (/ half2 2))))])
     ;; list -> vector
@@ -131,3 +129,15 @@
 (custom-sort (shuffle (range 12)))
 (custom-parallel-sort (shuffle (range 13)))
 ;; add more tests
+
+;; add timing code
+(define LOOPNUM 100)
+(define SIZE 100000)
+(define ls (for/list ([_ (in-range SIZE)]) (random 1000000)))
+
+(time (for ([_ (in-range LOOPNUM)])
+        (custom-sort ls)))
+
+(time (for ([_ (in-range LOOPNUM)])
+        (custom-parallel-sort ls)))
+
