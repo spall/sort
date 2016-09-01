@@ -16,6 +16,62 @@
 (define-syntax-rule (<? x y)
   (< x y))
 
+(define (custom-4xparallel-sort lst)
+  (define n (length lst))
+  
+  (define half1 (i>> n 1))
+  (define half2 (i- n half1))
+  (let* ([q1 (i>> (i>> n 1) 1)]
+         [q2 (i- (i>> n 1) q1)]
+         [q3 (i>> (i- n (i>> n 1)) 1)]
+         [q4 (i- (i- n (i>> n 1)) q3)]
+         [vec1 (make-vector (+ q1 (ceiling (/ q1 2))))]
+         [vec2 (make-vector (+ q2 (ceiling (/ q2 2))))]
+         [vec3 (make-vector (+ q3 (ceiling (/ q3 2))))]
+         [vec4 (make-vector (+ q4 (ceiling (/ q4 2))))])
+    ;; list -> vector
+    (define (loop i stop v ls)
+      (cond
+        [(empty? ls)
+         ls]
+        [(i< i stop)
+         (begin (displayln (car ls))
+           (vector-set! v i (car ls))
+                (loop (+ i 1) stop v (cdr ls)))]
+        [else
+         ls]))
+    
+    (loop 0 q4 vec4 (loop 0 q3 vec3 (loop 0 q2 vec2 (loop 0 q1 vec1 lst))))
+    
+    (let ([f1 (future (lambda () (sort vec1 q1)))]
+          [f2 (future (lambda () (sort vec2 q2)))]
+          [f3 (future (lambda () (sort vec3 q3)))])
+      
+      (sort vec4 q4)
+      (touch f1) (touch f2) (touch f3)
+      ;; merge the four vectors
+      ;; vector -> list
+
+
+
+      (let loop ([i n] [pos1 (- q1 1)] [pos2 (- q2 1)] [pos3 (- q3 1)] [pos4 (- q4 1)] [r '()])
+        (let ([i (sub1 i)])
+          (if (< i 0)
+              r
+              (let ([m (apply max (filter identity
+                                          (map (lambda (v p)
+                                                 (and (> p -1) (vector-ref v p)))
+                                               (list vec1 vec2 vec3 vec4) (list pos1 pos2 pos3 pos4))))])
+                (cond
+                  [(and (> pos1 -1) (equal? (vector-ref vec1 pos1) m))
+                   (loop i (sub1 pos1) pos2 pos3 pos4 (cons m r))]
+                  [(and (> pos2 -1) (equal? (vector-ref vec2 pos2) m))
+                   (loop i pos1 (sub1 pos2) pos3 pos4 (cons m r))]
+                  [(and (> pos3 -1) (equal? (vector-ref vec3 pos3) m))
+                   (loop i pos1 pos2 (sub1 pos3) pos4 (cons m r))]
+                  [else
+                   (loop i pos1 pos2 pos3 (sub1 pos4) (cons m r))]))))))))
+
 
 ;; take a vector instead of list
 (define (custom-parallel-sort lst)
@@ -141,12 +197,14 @@
         (copying-mergesort Alo Amid2 n/2-))
       (merge #f B1lo (i+ B1lo n/2+) Amid2 Ahi Alo))))
 
-;;(custom-sort (shuffle (range 12)))
+(custom-4xparallel-sort (shuffle (range 13)))
+
 ;;(visualize-futures (custom-parallel-sort (shuffle (range 10000))))
 ;; add more tests
 
 ;; add timing code
 
+#|
 (define LOOPNUM 50)
 (define SIZE 1000000)
 (define ls (for/list ([_ (in-range SIZE)]) (random 1000000)))
@@ -161,5 +219,6 @@
 
 (time (for ([_ (in-range LOOPNUM)])
         (custom-parallel-sort ls)))
+|#
 
 
