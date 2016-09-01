@@ -10,11 +10,14 @@
            (rename '#%unsafe i<= unsafe-fx<=)
            (rename '#%unsafe i>> unsafe-fxrshift)
            (rename '#%unsafe vref unsafe-vector-ref)
-           (rename '#%unsafe vset! unsafe-vector-set!))
+           (rename '#%unsafe vset! unsafe-vector-set!)
+           future-visualizer)
 
 (define-syntax-rule (<? x y)
   (< x y))
 
+
+;; take a vector instead of list
 (define (custom-parallel-sort lst)
   (define n (length lst))
   (define half1 (i>> n 1))
@@ -34,12 +37,17 @@
          (begin (vector-set! vec2 (- i half1) (car lst))
                 (loop (add1 i) (cdr lst)))]))
     
-    (define f1 (future (lambda () (sort vec1 half1)))) ;;
-    (sort vec2 half2)
+    (define f1 (future (lambda ()
+                         (time (begin
+                                 (displayln "timing sort of half1")
+                                 (sort vec1 half1)))))) ;;
+    (time (begin (displayln "timing sort of half2") (sort vec2 half2))) ;; time each half
     (touch f1)
     ;; merge the two vectors
     ;; vector -> list
-    (let loop ([i n] [pos1 (- half1 1)] [pos2 (- half2 1)] [r '()])
+    ;; time merge
+    (displayln "timing merge")
+    (time (let loop ([i n] [pos1 (- half1 1)] [pos2 (- half2 1)] [r '()])
       (let ([i (sub1 i)])
         (if (< i 0)
             r
@@ -51,7 +59,12 @@
               [(<? (vector-ref vec1 pos1) (vector-ref vec2 pos2))
                (loop i pos1 (- pos2 1) (cons (vector-ref vec2 pos2) r))]
               [else
-               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))]))))))
+               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))])))))))
+
+;; spawn 2 more futures.
+;; can parallelize merge?
+;; github.iu
+;; create one that uses just vectors, doesnt go from list to vector.
 
 (define (custom-sort lst)
   (define n (length lst))
@@ -61,11 +74,13 @@
       (when (pair? lst)
         (vector-set! vec i (car lst))
         (loop (add1 i) (cdr lst))))
-    (sort vec n)
+    (displayln "timing sequential sort")
+    (time (sort vec n))
     ;; vector -> list
-    (let loop ([i n] [r '()])
+    (displayln "timing sequential merge")
+    (time (let loop ([i n] [r '()])
       (let ([i (sub1 i)])
-        (if (< i 0) r (loop i (cons (vector-ref vec i) r)))))))
+        (if (< i 0) r (loop i (cons (vector-ref vec i) r))))))))
 
 (define (sort v n)
   (let* ([n/2- (i>> n 1)] [n/2+ (i- n n/2-)])
@@ -126,18 +141,25 @@
         (copying-mergesort Alo Amid2 n/2-))
       (merge #f B1lo (i+ B1lo n/2+) Amid2 Ahi Alo))))
 
-(custom-sort (shuffle (range 12)))
-(custom-parallel-sort (shuffle (range 13)))
+;;(custom-sort (shuffle (range 12)))
+;;(visualize-futures (custom-parallel-sort (shuffle (range 10000))))
 ;; add more tests
 
 ;; add timing code
-(define LOOPNUM 100)
-(define SIZE 100000)
+
+(define LOOPNUM 50)
+(define SIZE 1000000)
 (define ls (for/list ([_ (in-range SIZE)]) (random 1000000)))
 
+(displayln "timing non parallel sort")
 (time (for ([_ (in-range LOOPNUM)])
         (custom-sort ls)))
 
+(collect-garbage)
+(collect-garbage)
+(collect-garbage)
+
 (time (for ([_ (in-range LOOPNUM)])
         (custom-parallel-sort ls)))
+
 
