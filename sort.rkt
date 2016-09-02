@@ -16,11 +16,29 @@
 (define-syntax-rule (<? x y)
   (< x y))
 
+
 (define (custom-4xparallel-sort lst)
   (define n (length lst))
-  
-  (define half1 (i>> n 1))
-  (define half2 (i- n half1))
+
+  (define (merge v1 n1 v2 n2)
+    (define new-vec (make-vector (+ n1 n2)))
+    (let loop ([i 0] [pos1 0] [pos2 0])
+      (cond
+        [(>= i (vector-length new-vec))
+         new-vec]
+        [(>= pos1 n1)
+         (begin (vector-set! new-vec i (vector-ref v2 pos2))
+                (loop (add1 i) pos1 (add1 pos2)))]
+        [(>= pos2 n2)
+         (begin (vector-set! new-vec i (vector-ref v1 pos1))
+                (loop (add1 i) (add1 pos1) pos2))]
+        [(<? (vector-ref v1 pos1) (vector-ref v2 pos2))
+         (begin (vector-set! new-vec i (vector-ref v1 pos1))
+                (loop (add1 i) (add1 pos1) pos2))]
+        [else
+         (begin (vector-set! new-vec i (vector-ref v2 pos2))
+                (loop (add1 i) pos1 (add1 pos2)))])))
+        
   (let* ([q1 (i>> (i>> n 1) 1)]
          [q2 (i- (i>> n 1) q1)]
          [q3 (i>> (i- n (i>> n 1)) 1)]
@@ -35,42 +53,27 @@
         [(empty? ls)
          ls]
         [(i< i stop)
-         (begin (displayln (car ls))
+         (begin 
            (vector-set! v i (car ls))
-                (loop (+ i 1) stop v (cdr ls)))]
+           (loop (+ i 1) stop v (cdr ls)))]
         [else
          ls]))
     
     (loop 0 q4 vec4 (loop 0 q3 vec3 (loop 0 q2 vec2 (loop 0 q1 vec1 lst))))
+
+    (sort (make-vector 15 2) 10)
     
     (let ([f1 (future (lambda () (sort vec1 q1)))]
           [f2 (future (lambda () (sort vec2 q2)))]
           [f3 (future (lambda () (sort vec3 q3)))])
-      
+         ;; [f4 (future (lambda () (sort vec4 q4)))])
       (sort vec4 q4)
       (touch f1) (touch f2) (touch f3)
       ;; merge the four vectors
       ;; vector -> list
-
-
-
-      (let loop ([i n] [pos1 (- q1 1)] [pos2 (- q2 1)] [pos3 (- q3 1)] [pos4 (- q4 1)] [r '()])
-        (let ([i (sub1 i)])
-          (if (< i 0)
-              r
-              (let ([m (apply max (filter identity
-                                          (map (lambda (v p)
-                                                 (and (> p -1) (vector-ref v p)))
-                                               (list vec1 vec2 vec3 vec4) (list pos1 pos2 pos3 pos4))))])
-                (cond
-                  [(and (> pos1 -1) (equal? (vector-ref vec1 pos1) m))
-                   (loop i (sub1 pos1) pos2 pos3 pos4 (cons m r))]
-                  [(and (> pos2 -1) (equal? (vector-ref vec2 pos2) m))
-                   (loop i pos1 (sub1 pos2) pos3 pos4 (cons m r))]
-                  [(and (> pos3 -1) (equal? (vector-ref vec3 pos3) m))
-                   (loop i pos1 pos2 (sub1 pos3) pos4 (cons m r))]
-                  [else
-                   (loop i pos1 pos2 pos3 (sub1 pos4) (cons m r))]))))))))
+      ;; this is murder. redo it.
+      (let ([fm1 (future (lambda () (merge vec1 q1 vec2 q2)))])
+        (merge (merge vec3 q3 vec4 q4) (+ q3 q4) (touch fm1) (+ q1 q2))))))
 
 
 ;; take a vector instead of list
@@ -92,18 +95,17 @@
         [else
          (begin (vector-set! vec2 (- i half1) (car lst))
                 (loop (add1 i) (cdr lst)))]))
+
+    (sort (make-vector 15 2) 10)
     
     (define f1 (future (lambda ()
-                         (time (begin
-                                 (displayln "timing sort of half1")
-                                 (sort vec1 half1)))))) ;;
-    (time (begin (displayln "timing sort of half2") (sort vec2 half2))) ;; time each half
+                         (sort vec1 half1)))) ;;
+    (sort vec2 half2) ;; time each half
     (touch f1)
     ;; merge the two vectors
     ;; vector -> list
     ;; time merge
-    (displayln "timing merge")
-    (time (let loop ([i n] [pos1 (- half1 1)] [pos2 (- half2 1)] [r '()])
+    (let loop ([i n] [pos1 (- half1 1)] [pos2 (- half2 1)] [r '()])
       (let ([i (sub1 i)])
         (if (< i 0)
             r
@@ -115,7 +117,7 @@
               [(<? (vector-ref vec1 pos1) (vector-ref vec2 pos2))
                (loop i pos1 (- pos2 1) (cons (vector-ref vec2 pos2) r))]
               [else
-               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))])))))))
+               (loop i (- pos1 1) pos2 (cons (vector-ref vec1 pos1) r))]))))))
 
 ;; spawn 2 more futures.
 ;; can parallelize merge?
@@ -130,13 +132,11 @@
       (when (pair? lst)
         (vector-set! vec i (car lst))
         (loop (add1 i) (cdr lst))))
-    (displayln "timing sequential sort")
-    (time (sort vec n))
+    (sort vec n)
     ;; vector -> list
-    (displayln "timing sequential merge")
-    (time (let loop ([i n] [r '()])
+    (let loop ([i n] [r '()])
       (let ([i (sub1 i)])
-        (if (< i 0) r (loop i (cons (vector-ref vec i) r))))))))
+        (if (< i 0) r (loop i (cons (vector-ref vec i) r)))))))
 
 (define (sort v n)
   (let* ([n/2- (i>> n 1)] [n/2+ (i- n n/2-)])
@@ -197,16 +197,16 @@
         (copying-mergesort Alo Amid2 n/2-))
       (merge #f B1lo (i+ B1lo n/2+) Amid2 Ahi Alo))))
 
-(custom-4xparallel-sort (shuffle (range 13)))
+;;(custom-4xparallel-sort (shuffle (range 12)))
 
-;;(visualize-futures (custom-parallel-sort (shuffle (range 10000))))
+;;(visualize-futures (custom-4xparallel-sort (shuffle (range 100000))))
 ;; add more tests
 
 ;; add timing code
 
-#|
-(define LOOPNUM 50)
-(define SIZE 1000000)
+
+(define LOOPNUM 1)
+(define SIZE 100000)
 (define ls (for/list ([_ (in-range SIZE)]) (random 1000000)))
 
 (displayln "timing non parallel sort")
@@ -217,8 +217,23 @@
 (collect-garbage)
 (collect-garbage)
 
+(displayln "timing 4 thread sort")
+(time (for ([_ (in-range LOOPNUM)])
+                           (custom-4xparallel-sort ls)))
+
+(collect-garbage)
+(collect-garbage)
+(collect-garbage)
+
+(displayln "timing 2 thread sort")
 (time (for ([_ (in-range LOOPNUM)])
         (custom-parallel-sort ls)))
-|#
+
+
+
+
+
+
+
 
 
